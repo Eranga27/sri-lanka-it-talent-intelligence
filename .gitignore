@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+venv2/
+.venv/
+.env
+
+# Data lake — keep directory structure but not generated files
+data/bronze/*.parquet
+data/silver/*.parquet
+data/gold/*.parquet
+
+# Next.js
+apps/web/.next/
+apps/web/node_modules/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

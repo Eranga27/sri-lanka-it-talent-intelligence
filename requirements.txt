@@ -1,0 +1,10 @@
+fastapi[standard]
+pydantic
+uvicorn[standard]
+duckdb
+pyarrow
+pandas
+pytest
+httpx
+httpretty
+python-dotenv

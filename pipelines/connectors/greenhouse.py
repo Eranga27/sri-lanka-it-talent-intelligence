@@ -102,30 +102,7 @@ def _classify_role(title: str, department: Optional[str]) -> Tuple[Optional[str]
     return None, "unclassified", 0.0
 
 
-def _detect_sri_lanka(location_name: str) -> Tuple[Optional[str], bool]:
-    """
-    Deterministically detect if a location refers to Sri Lanka.
-
-    Returns:
-        (country_value, is_sri_lanka)
-    """
-    if not location_name:
-        return None, False
-
-    loc_lower = location_name.lower().strip()
-
-    # Direct substring matches
-    for kw in _SL_KEYWORDS:
-        if kw == "lk":
-            # Only match "lk" as an isolated word / suffix, e.g. ", LK" or "(LK)"
-            import re
-            if re.search(r"\blk\b", loc_lower):
-                return "Sri Lanka", True
-        else:
-            if kw in loc_lower:
-                return "Sri Lanka", True
-
-    return None, False
+from pipelines.transformations.location import normalize_location
 
 
 class GreenhouseConnector(BaseConnector):
@@ -298,7 +275,9 @@ class GreenhouseConnector(BaseConnector):
         # --- Location ---
         location_obj = raw_job.get("location") or {}
         location_raw = location_obj.get("name") or ""
-        country, _is_sl = _detect_sri_lanka(location_raw)
+        country, region, city, location, detection_method, confidence = normalize_location(
+            raw_location_string=location_raw
+        )
 
         # --- Department ---
         departments = raw_job.get("departments") or []
@@ -330,10 +309,13 @@ class GreenhouseConnector(BaseConnector):
             "company": board,
             "title": title,
             "description": description,
-            "location": location_raw or None,
+            "location_raw": location_raw or None,
+            "location": location,
             "country": country,
-            "region": None,      # Not provided by Greenhouse
-            "city": None,        # Not provided by Greenhouse
+            "region": region,
+            "city": city,
+            "location_detection_method": detection_method,
+            "location_confidence": confidence,
             "employment_type": None,
             "department": department_name,
             "experience_min": None,

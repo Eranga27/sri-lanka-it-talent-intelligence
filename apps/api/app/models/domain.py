@@ -22,10 +22,13 @@ class JobContract(BaseModel):
     company: Optional[str] = None
     title: str
     description: Optional[str] = None
+    location_raw: Optional[str] = None
     location: Optional[str] = None
     country: Optional[str] = None
     region: Optional[str] = None
     city: Optional[str] = None
+    location_detection_method: Optional[str] = None
+    location_confidence: Optional[float] = None
     employment_type: Optional[str] = None
     department: Optional[str] = None
     experience_min: Optional[int] = None
@@ -63,7 +66,13 @@ class SourceRegistryEntry(BaseModel):
     terms_status: str
     reliability_score: float
     integration_status: str
+    last_attempted_at: Optional[datetime] = None
     last_successful_fetch: Optional[datetime] = None
+    last_error: Optional[str] = None
+    http_status: Optional[int] = None
+    records_last_fetch: Optional[int] = None
+    consecutive_failures: int = 0
+    source_health: str = "not_configured"
     notes: Optional[str] = None
 
 

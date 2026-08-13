@@ -17,7 +17,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 from pipelines.connectors.greenhouse import (
     GreenhouseConnector,
     _classify_role,
-    _detect_sri_lanka,
 )
 
 
@@ -92,38 +91,6 @@ class TestRoleClassification:
         cat, method, conf = _classify_role("Office Manager", "HR")
         assert cat is None
         assert conf == 0.0
-
-
-# ---------------------------------------------------------------------------
-# Location detection tests
-# ---------------------------------------------------------------------------
-
-class TestSriLankaDetection:
-    def test_colombo(self):
-        country, is_lk = _detect_sri_lanka("Colombo, Sri Lanka")
-        assert country == "Sri Lanka"
-        assert is_lk is True
-
-    def test_sri_lanka_explicit(self):
-        country, is_lk = _detect_sri_lanka("Sri Lanka - Remote")
-        assert is_lk is True
-
-    def test_lk_isolated(self):
-        country, is_lk = _detect_sri_lanka("Colombo, LK")
-        assert is_lk is True
-
-    def test_not_sri_lanka(self):
-        country, is_lk = _detect_sri_lanka("London, United Kingdom")
-        assert is_lk is False
-        assert country is None
-
-    def test_empty_location(self):
-        country, is_lk = _detect_sri_lanka("")
-        assert is_lk is False
-
-    def test_none_location(self):
-        country, is_lk = _detect_sri_lanka(None)
-        assert is_lk is False
 
 
 # ---------------------------------------------------------------------------

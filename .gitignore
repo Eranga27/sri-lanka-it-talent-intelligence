@@ -15,8 +15,10 @@ venv2/
 .env
 
 # Data lake — keep directory structure but not generated files
-data/bronze/*.parquet
+data/bronze/**/*.parquet
+data/silver/**/*.parquet
 data/silver/*.parquet
+data/gold/**/*.parquet
 data/gold/*.parquet
 
 # Next.js

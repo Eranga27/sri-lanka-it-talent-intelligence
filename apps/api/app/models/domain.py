@@ -77,13 +77,24 @@ class SourceRegistryEntry(BaseModel):
 
 
 class SkillTaxonomyEntry(BaseModel):
-    """Canonical skill entry. Demand percentages are never stored here."""
+    """Canonical skill entry."""
     skill_id: str
     canonical_name: str
     category: str
     aliases: List[str]
     technology_family: Optional[str] = None
     active: bool = True
+
+class JobSkill(BaseModel):
+    """Normalized relational mapping between a job and a skill."""
+    job_id: str
+    skill_id: str
+    canonical_skill: str
+    raw_match: str
+    skill_category: str
+    extraction_method: str
+    confidence: float
+    extracted_at: datetime
 
 
 class DataQualityReport(BaseModel):

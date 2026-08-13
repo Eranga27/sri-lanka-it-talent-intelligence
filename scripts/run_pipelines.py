@@ -31,7 +31,9 @@ from pipelines.connectors.greenhouse import GreenhouseConnector
 from pipelines.connectors.workable import WorkableConnector
 from pipelines.connectors.lever import LeverConnector
 from pipelines.quality.framework import DataQualityFramework
-from apps.api.app.models.domain import JobContract
+from apps.api.app.models.domain import JobContract, JobSkill
+from pipelines.skills import extract_skills_from_job
+from pipelines.classification import classify_role_v2
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -50,6 +52,7 @@ BRONZE_DIR = os.path.join(PROJECT_ROOT, "data", "bronze")
 SILVER_DIR = os.path.join(PROJECT_ROOT, "data", "silver")
 GOLD_DIR = os.path.join(PROJECT_ROOT, "data", "gold")
 SILVER_JOBS_PATH = os.path.join(SILVER_DIR, "jobs.parquet")
+SILVER_SKILLS_PATH = os.path.join(SILVER_DIR, "job_skills.parquet")
 
 os.makedirs(BRONZE_DIR, exist_ok=True)
 os.makedirs(SILVER_DIR, exist_ok=True)
@@ -60,7 +63,6 @@ os.makedirs(GOLD_DIR, exist_ok=True)
 # ---------------------------------------------------------------------------
 
 def load_config() -> Dict[str, Any]:
-    """Load pipeline configuration from environment variables."""
     gh_boards = [b.strip() for b in os.getenv("GREENHOUSE_BOARDS", "canonical,gitlab").split(",") if b.strip()]
     workable_boards = [b.strip() for b in os.getenv("WORKABLE_BOARDS", "homey,international-water-management-institute,orfium,unison,inivos").split(",") if b.strip()]
     lever_boards = [b.strip() for b in os.getenv("LEVER_BOARDS", "leverdemo").split(",") if b.strip()]
@@ -129,7 +131,6 @@ def _detect_duplicates(
 # ---------------------------------------------------------------------------
 
 def run_pipeline(config: Dict[str, Any]):
-    """Run full Bronze → Silver → Gold pipeline for all connectors."""
     t0 = time.time()
     now_iso = datetime.now(timezone.utc).isoformat()
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -173,7 +174,7 @@ def run_pipeline(config: Dict[str, Any]):
             pq.write_table(pa.Table.from_pandas(df), bronze_path)
             logger.info("Bronze written: %s", bronze_path)
         
-        # SILVER
+        # SILVER NORMALIZATION
         if not raw_data:
             logger.info("No records to process for %s", source_name)
             continue
@@ -206,7 +207,36 @@ def run_pipeline(config: Dict[str, Any]):
         reports.append(report)
         logger.info("%s summary: %d accepted, %d rejected, %d SL records.", source_name, len(accepted), len(rejected), sl_count)
 
-    # MERGE INTO SILVER
+    # NLP & CLASSIFICATION (Phase 1D)
+    logger.info("=" * 60)
+    logger.info("APPLYING NLP & CLASSIFICATION (V2)")
+    
+    all_job_skills = []
+    classified_sl_it_count = 0
+    extracted_skills_count = 0
+    
+    for job in all_accepted_records:
+        # Extract Skills
+        skills = extract_skills_from_job(job)
+        all_job_skills.extend(skills)
+        if skills:
+            extracted_skills_count += len(skills)
+            
+        # Re-Classify Role with V2 (including skill evidence)
+        cat, method, conf = classify_role_v2(
+            job.get("title"), job.get("department"), job.get("description"), skills
+        )
+        job["role_category"] = cat
+        job["classification_method"] = method
+        job["classification_confidence"] = conf
+        
+        if job.get("country") == "Sri Lanka" and cat is not None:
+            classified_sl_it_count += 1
+            
+    logger.info("Classification applied. SL IT records found: %d", classified_sl_it_count)
+    logger.info("Extracted %d total skills across all active jobs.", extracted_skills_count)
+
+    # MERGING SILVER LAYER
     logger.info("=" * 60)
     logger.info("MERGING SILVER LAYER")
     accepted_df = pd.DataFrame(all_accepted_records) if all_accepted_records else pd.DataFrame()
@@ -219,20 +249,26 @@ def run_pipeline(config: Dict[str, Any]):
                 expired_df = old_df[~old_df["job_id"].isin(new_ids)].copy()
                 if not expired_df.empty:
                     expired_df["status"] = "expired"
-                    # Only update last_seen_at if it's the current run that expired them?
-                    # Or keep their old last_seen_at. We keep their old last_seen_at which means it's accurate.
                     final_df = pd.concat([accepted_df, expired_df], ignore_index=True)
                 else:
                     final_df = accepted_df
             except Exception as exc:
-                logger.warning("Could not merge existing Silver; overwriting. Reason: %s", exc)
+                logger.warning("Could not merge existing Silver jobs; overwriting. Reason: %s", exc)
                 final_df = accepted_df
         else:
             final_df = accepted_df
 
-        # Write to silver
+        # Write to silver jobs
         pq.write_table(pa.Table.from_pandas(final_df), SILVER_JOBS_PATH)
-        logger.info("Silver written: %d total records → %s", len(final_df), SILVER_JOBS_PATH)
+        logger.info("Silver jobs written: %d total records → %s", len(final_df), SILVER_JOBS_PATH)
+        
+        # Write silver job skills (only tracking skills for active jobs in this run for simplicity, or we could append. 
+        # Overwrite with current active mapping is safer to avoid duplication over time).
+        skills_df = pd.DataFrame(all_job_skills) if all_job_skills else pd.DataFrame()
+        if not skills_df.empty:
+            pq.write_table(pa.Table.from_pandas(skills_df), SILVER_SKILLS_PATH)
+            logger.info("Silver skills written: %d total relationships → %s", len(skills_df), SILVER_SKILLS_PATH)
+            
     else:
         logger.warning("No valid records to write to Silver across all sources.")
 
@@ -242,20 +278,74 @@ def run_pipeline(config: Dict[str, Any]):
     if os.path.exists(SILVER_JOBS_PATH):
         try:
             conn = duckdb.connect(':memory:')
-            # Generate dynamically
+            
+            # Gold Role Demand (Active jobs only)
             gold_role_demand = conn.execute(f"""
                 SELECT 
                     role_category, 
                     COUNT(*) as job_count, 
                     COUNT(DISTINCT company) as unique_companies,
-                    '{now_iso}' as calculated_at
+                    '{now_iso}' as calculated_at,
+                    COUNT(DISTINCT source) as source_count,
+                    '{now_iso}' as period_start,
+                    '{now_iso}' as period_end,
+                    'Sri Lanka' as country
                 FROM read_parquet('{SILVER_JOBS_PATH}')
                 WHERE status = 'active' AND country = 'Sri Lanka' AND role_category IS NOT NULL
                 GROUP BY role_category
+                ORDER BY job_count DESC
             """).df()
-            gold_path = os.path.join(GOLD_DIR, "gold_role_demand.parquet")
-            pq.write_table(pa.Table.from_pandas(gold_role_demand), gold_path)
-            logger.info("Gold Role Demand written to %s", gold_path)
+            
+            total_active_sl_it_jobs = max(1, gold_role_demand['job_count'].sum())
+            gold_role_demand['job_percentage'] = (gold_role_demand['job_count'] / total_active_sl_it_jobs) * 100
+            
+            gold_role_path = os.path.join(GOLD_DIR, "gold_role_demand.parquet")
+            pq.write_table(pa.Table.from_pandas(gold_role_demand), gold_role_path)
+            logger.info("Gold Role Demand written to %s", gold_role_path)
+            
+            # Gold Skill Demand (Active Sri Lankan IT jobs only)
+            if os.path.exists(SILVER_SKILLS_PATH):
+                gold_skill_demand = conn.execute(f"""
+                    SELECT 
+                        s.skill_id,
+                        s.canonical_skill as skill_name,
+                        s.skill_category,
+                        COUNT(DISTINCT j.job_id) as job_count,
+                        COUNT(DISTINCT j.company) as unique_companies,
+                        COUNT(DISTINCT j.source) as source_count,
+                        '{now_iso}' as calculated_at,
+                        '{now_iso}' as period_start,
+                        '{now_iso}' as period_end,
+                        'Sri Lanka' as country
+                    FROM read_parquet('{SILVER_SKILLS_PATH}') s
+                    JOIN read_parquet('{SILVER_JOBS_PATH}') j ON s.job_id = j.job_id
+                    WHERE j.status = 'active' AND j.country = 'Sri Lanka' AND j.role_category IS NOT NULL
+                    GROUP BY s.skill_id, s.canonical_skill, s.skill_category
+                    ORDER BY job_count DESC
+                """).df()
+                
+                gold_skill_demand['job_percentage'] = (gold_skill_demand['job_count'] / total_active_sl_it_jobs) * 100
+                gold_skill_path = os.path.join(GOLD_DIR, "gold_skill_demand.parquet")
+                pq.write_table(pa.Table.from_pandas(gold_skill_demand), gold_skill_path)
+                logger.info("Gold Skill Demand written to %s", gold_skill_path)
+
+            # Market Coverage Metrics
+            market_summary = conn.execute(f"""
+                SELECT 
+                    COUNT(*) as total_observed_jobs,
+                    SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as total_active_jobs,
+                    SUM(CASE WHEN status = 'active' AND country = 'Sri Lanka' THEN 1 ELSE 0 END) as total_sri_lankan_jobs,
+                    SUM(CASE WHEN status = 'active' AND country = 'Sri Lanka' AND role_category IS NOT NULL THEN 1 ELSE 0 END) as total_sri_lankan_it_jobs,
+                    COUNT(DISTINCT company) as unique_companies,
+                    COUNT(DISTINCT source) as unique_sources,
+                    MAX(ingested_at) as latest_ingestion,
+                    MIN(first_seen_at) as oldest_observation
+                FROM read_parquet('{SILVER_JOBS_PATH}')
+            """).df()
+            market_path = os.path.join(GOLD_DIR, "gold_market_summary.parquet")
+            pq.write_table(pa.Table.from_pandas(market_summary), market_path)
+            logger.info("Market Summary written to %s", market_path)
+            
         except Exception as exc:
             logger.error("Failed to generate Gold aggregations: %s", exc)
 

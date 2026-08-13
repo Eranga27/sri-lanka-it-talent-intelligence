@@ -68,6 +68,38 @@ export interface DataQualityInfo {
   message?: string;
 }
 
+export interface MarketSummary {
+  data_available: boolean;
+  total_observed_jobs?: number;
+  total_active_jobs?: number;
+  total_sri_lankan_jobs?: number;
+  total_sri_lankan_it_jobs?: number;
+  unique_companies?: number;
+  unique_sources?: number;
+  latest_ingestion?: string;
+  oldest_observation?: string;
+}
+
+export interface MarketCoverage {
+  state: "limited" | "moderate" | "broad";
+  metrics: MarketSummary;
+  note: string;
+}
+
+export interface SkillDemandEntry {
+  skill_id: string;
+  skill_name: string;
+  skill_category: string;
+  job_count: number;
+  job_percentage: number;
+}
+
+export interface RoleDemandEntry {
+  role_category: string;
+  job_count: number;
+  job_percentage: number;
+}
+
 async function apiFetch<T>(path: string): Promise<T | null> {
   try {
     const res = await fetch(`${API_BASE}${path}`, {
@@ -88,4 +120,9 @@ export const api = {
   getJobs: (limit = 20, offset = 0) =>
     apiFetch<JobRecord[]>(`/api/jobs/?limit=${limit}&offset=${offset}`),
   getDataQuality: () => apiFetch<DataQualityInfo>("/api/data-quality/"),
+  
+  getMarketSummary: () => apiFetch<MarketSummary>("/api/market/summary"),
+  getMarketCoverage: () => apiFetch<MarketCoverage>("/api/market/coverage"),
+  getSkillDemand: () => apiFetch<SkillDemandEntry[]>("/api/skills/demand"),
+  getRoleDemand: () => apiFetch<RoleDemandEntry[]>("/api/roles/demand"),
 };

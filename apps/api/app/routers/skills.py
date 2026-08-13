@@ -1,19 +1,19 @@
-"""Skills router — Phase 1C placeholder."""
 from fastapi import APIRouter
+from ..services import duckdb_service
 
 router = APIRouter()
-
 
 @router.get("/")
 async def get_skills():
     """
-    Skill demand data.
-    Will be populated after Phase 1C skill-extraction pipeline is complete.
+    Stub for getting all canonical skills from taxonomy.
     """
-    return {
-        "data": [],
-        "message": (
-            "Skill extraction pipeline not yet active. "
-            "Run Phase 1C to populate skill demand data."
-        ),
-    }
+    from pipelines.skills.taxonomy import TAXONOMY
+    return TAXONOMY
+
+@router.get("/demand")
+async def get_skills_demand():
+    """
+    Returns actual gold_skill_demand dynamically computed.
+    """
+    return duckdb_service.get_skill_demand()

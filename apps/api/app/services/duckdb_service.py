@@ -198,3 +198,80 @@ def get_data_quality_info() -> Dict[str, Any]:
         return {"data_available": False, "error": str(exc)}
     finally:
         con.close()
+
+GOLD_SKILL_PATH = os.path.join(SILVER_LAKE_PATH, "..", "gold", "gold_skill_demand.parquet").replace("\\", "/")
+GOLD_ROLE_PATH = os.path.join(SILVER_LAKE_PATH, "..", "gold", "gold_role_demand.parquet").replace("\\", "/")
+GOLD_MARKET_PATH = os.path.join(SILVER_LAKE_PATH, "..", "gold", "gold_market_summary.parquet").replace("\\", "/")
+
+def get_market_summary() -> Dict[str, Any]:
+    if not os.path.exists(GOLD_MARKET_PATH):
+        return {"data_available": False}
+    con = _connect()
+    try:
+        query = f"SELECT * FROM read_parquet('{GOLD_MARKET_PATH}')"
+        df = con.execute(query).fetchdf()
+        if df.empty:
+            return {"data_available": False}
+        record = df.to_dict(orient="records")[0]
+        # Make timestamps strings
+        if not pd.isna(record.get('latest_ingestion')):
+            record['latest_ingestion'] = str(record['latest_ingestion'])
+        if not pd.isna(record.get('oldest_observation')):
+            record['oldest_observation'] = str(record['oldest_observation'])
+        record["data_available"] = True
+        return record
+    except Exception as exc:
+        logger.error("get_market_summary failed: %s", exc)
+        return {"data_available": False}
+    finally:
+        con.close()
+
+def get_skill_demand() -> List[Dict[str, Any]]:
+    if not os.path.exists(GOLD_SKILL_PATH):
+        return []
+    con = _connect()
+    try:
+        query = f"SELECT * FROM read_parquet('{GOLD_SKILL_PATH}') ORDER BY job_count DESC LIMIT 50"
+        df = con.execute(query).fetchdf()
+        return df.to_dict(orient="records")
+    except Exception as exc:
+        logger.error("get_skill_demand failed: %s", exc)
+        return []
+    finally:
+        con.close()
+
+def get_role_demand() -> List[Dict[str, Any]]:
+    if not os.path.exists(GOLD_ROLE_PATH):
+        return []
+    con = _connect()
+    try:
+        query = f"SELECT * FROM read_parquet('{GOLD_ROLE_PATH}') ORDER BY job_count DESC"
+        df = con.execute(query).fetchdf()
+        return df.to_dict(orient="records")
+    except Exception as exc:
+        logger.error("get_role_demand failed: %s", exc)
+        return []
+    finally:
+        con.close()
+
+def get_coverage_metrics() -> Dict[str, Any]:
+    summary = get_market_summary()
+    if not summary.get("data_available"):
+        return {"state": "limited", "metrics": summary}
+        
+    sl_it_jobs = summary.get("total_sri_lankan_it_jobs", 0)
+    sources = summary.get("unique_sources", 0)
+    
+    if sl_it_jobs > 500 and sources > 3:
+        state = "broad"
+    elif sl_it_jobs > 100 and sources >= 2:
+        state = "moderate"
+    else:
+        state = "limited"
+        
+    return {
+        "state": state,
+        "metrics": summary,
+        "note": "Coverage is strictly limited to observed connected sources and does not represent a national census."
+    }
+

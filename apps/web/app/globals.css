@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import "tailwindcss";
 
 @theme {
   --color-background: #050508;
@@ -71,6 +71,15 @@ body {
 .fade-up-3 { animation-delay: 0.20s; }
 .fade-up-4 { animation-delay: 0.28s; }
 
+/* Horizontal bar grow (CSS-only, no JS library needed) */
+@keyframes bar-grow {
+  from { width: 0; }
+  to   { width: var(--bar-pct, 0%); }
+}
+.bar-grow {
+  animation: bar-grow 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 /* Data badge */
 .badge-live {
   background: rgba(34,197,94,0.12);
@@ -98,5 +107,9 @@ body {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+  /* Immediately show bar at full width */
+  .bar-grow {
+    width: var(--bar-pct, 0%) !important;
   }
 }

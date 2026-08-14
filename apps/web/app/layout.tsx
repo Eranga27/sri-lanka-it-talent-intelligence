@@ -46,6 +46,9 @@ function Header() {
           <a href="#roles" className="text-xs font-medium text-gray-400 hover:text-white transition-colors duration-150">
             Roles
           </a>
+          <a href="#skills" className="text-xs font-medium text-gray-400 hover:text-white transition-colors duration-150">
+            Skills
+          </a>
           <a href="#sources" className="text-xs font-medium text-gray-400 hover:text-white transition-colors duration-150">
             Sources
           </a>
@@ -57,7 +60,7 @@ function Header() {
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold badge-live tracking-wider">
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            PHASE 1B
+            PHASE 1E
           </span>
         </div>
       </div>

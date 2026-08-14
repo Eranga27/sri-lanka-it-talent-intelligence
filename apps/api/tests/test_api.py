@@ -54,11 +54,47 @@ def test_sources_returns_registry():
     assert "greenhouse" in source_ids
 
 
-def test_roles_empty():
-    with patch("apps.api.app.services.duckdb_service._has_silver_data", return_value=False):
-        response = client.get("/api/roles/")
+def test_roles_taxonomy():
+    """Roles endpoint returns static taxonomy list."""
+    response = client.get("/api/roles/")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert "Software Engineering" in data
+
+
+def test_roles_demand_empty():
+    """When no Gold data exists, role demand is empty."""
+    with patch("os.path.exists", return_value=False):
+        response = client.get("/api/roles/demand")
     assert response.status_code == 200
     assert response.json() == []
+
+
+def test_skills_demand_empty():
+    """When no Gold data exists, skill demand is empty."""
+    with patch("os.path.exists", return_value=False):
+        response = client.get("/api/skills/demand")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_market_summary_empty():
+    """When no Gold data exists, market summary reports data_available False."""
+    with patch("os.path.exists", return_value=False):
+        response = client.get("/api/market/summary")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["data_available"] is False
+
+
+def test_market_coverage_empty():
+    """When no Gold data exists, market coverage state is limited."""
+    with patch("os.path.exists", return_value=False):
+        response = client.get("/api/market/coverage")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["state"] == "limited"
 
 
 def test_data_quality_empty():
@@ -83,3 +119,4 @@ def test_jobs_pagination_params():
     with patch("apps.api.app.services.duckdb_service._has_silver_data", return_value=False):
         response = client.get("/api/jobs/?limit=10&offset=0")
     assert response.status_code == 200
+

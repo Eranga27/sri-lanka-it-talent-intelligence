@@ -22,6 +22,7 @@ data/gold/**/*.parquet
 data/gold/*.parquet
 
 # Next.js
+.next/
 apps/web/.next/
 apps/web/node_modules/
 

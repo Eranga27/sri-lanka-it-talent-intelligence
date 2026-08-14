@@ -1,0 +1,68 @@
+name: CI Pipeline — Production Hardening & Quality Assurance
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend-and-data-integrity:
+    name: Backend & Data Integrity Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/python-helper@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Pytest suite (Unit, API, Integrity, Resilience)
+        run: |
+          python -m pytest tests apps/api/tests -v
+
+  frontend-build-and-e2e:
+    name: Frontend Build & Playwright E2E Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: apps/web/package.json
+
+      - name: Install Frontend dependencies
+        working-directory: apps/web
+        run: |
+          npm ci || npm install
+
+      - name: Verify Next.js Production Build
+        working-directory: apps/web
+        run: |
+          npm run build
+
+      - name: Install Playwright Browsers
+        working-directory: apps/web
+        run: |
+          npx playwright install --with-deps chromium
+
+      - name: Run Playwright E2E Tests
+        working-directory: apps/web
+        env:
+          CI: "true"
+        run: |
+          npm run test:e2e

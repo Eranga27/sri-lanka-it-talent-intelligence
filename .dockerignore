@@ -1,0 +1,28 @@
+# Node.js
+**/node_modules/
+**/.next/
+apps/web/.next/
+
+# Python
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+venv/
+.venv/
+
+# Environment / Secret
+.env
+.env.local
+
+# Git & Testing
+.git/
+.github/
+.pytest_cache/
+htmlcov/
+apps/web/playwright-report/
+apps/web/test-results/
+
+# Temporary / Large raw Parquet
+data/bronze/*/*.parquet
+data/silver/*/*.parquet

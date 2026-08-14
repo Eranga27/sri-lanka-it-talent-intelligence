@@ -1,45 +1,126 @@
 # Sri Lanka IT Talent Intelligence
 
-A data-driven web platform designed to analyze the relationship between IT industry demand and IT talent supply in Sri Lanka.
+A data-driven, zero-cost IT job-market intelligence platform designed to observe, analyze, and visualize Sri Lankan IT industry demand and technology skill trends in real time.
 
-## Project Purpose
-To provide continuously refreshed intelligence on IT job demand, vacancies, roles, technical skills, and talent supply in Sri Lanka. This is a robust data engineering and analytics project, not a static dashboard. All analytical values shown originate from actual source data and are calculated dynamically.
+---
 
-## Architecture & Technology Stack
-- **Frontend**: Next.js, React, TypeScript, Tailwind CSS
-- **Backend**: Python, FastAPI, Pydantic
-- **Data Engineering**: Python, PyArrow, DuckDB, Parquet
-- **Architecture**: Medallion-style architecture (Bronze -> Silver -> Gold layers)
+## Architecture & Data Pipeline
 
-## Zero-Cost Philosophy
-This project is built using:
-- Open-source software
-- Free/public APIs
-- Free official datasets
-- Local execution & storage
-- No required paid SaaS services
+The platform adheres strictly to a **Medallion Architecture (Bronze → Silver → Gold)** backed by local Parquet storage and DuckDB in-memory analytical querying:
 
-## Data Provenance
-Every external data record retains its source, source ID, ingestion timestamps, and source-specific metadata to ensure complete traceability.
+```text
+       PUBLIC ATS SOURCES (Greenhouse, Workable, Lever)
+                             │
+                             ▼
+                    [ BRONZE LAYER ]
+           Raw API payloads with audit provenance
+                             │
+                             ▼
+                    [ SILVER LAYER ]
+      Sri Lanka location filter + NLP Skill Extraction 
+            + Deterministic V2 Role Classifier
+                             │
+                             ▼
+                     [ GOLD LAYER ]
+        Aggregated demand metrics (Parquet/DuckDB)
+                             │
+                             ▼
+             [ FASTAPI ANALYTICAL BACKEND ]
+                             │
+                             ▼
+          [ NEXT.JS INTELLIGENCE DASHBOARD UI ]
+```
 
-## Current Data Sources (Registered)
-- Department of Census and Statistics — Sri Lanka
-- ICTA — National IT-BPM Workforce Survey
-- Greenhouse Job Board
-- SmartRecruiters
+---
 
-## Limitations
-- Fake analytical metrics are not used. Until data pipelines are fully hydrated, UI components will show empty states.
+## Core Capabilities (Phases 1A – 1F Verified)
 
-## Local Setup
-1. Clone the repository.
-2. Run `cp .env.example .env`.
-3. Set up the Python virtual environment: `python -m venv .venv` and `pip install -r requirements.txt`.
-4. Run FastAPI backend: `cd apps/api && uvicorn app.main:app --reload`.
-5. Run Next.js frontend: `cd apps/web && npm run dev`.
+- **Multi-Source ATS Ingestion**: Ingests public vacancies from Greenhouse, Workable, and Lever.
+- **Location Normalization**: Sri Lankan region and city parsing with strict non-LK filtering.
+- **Deterministic Skill Extraction**: Word-boundary keyword & alias matching across 40+ technology categories.
+- **V2 Role Classification**: Hybrid title, department, and extracted skill evidence scoring into 12 canonical IT role categories.
+- **Gold Analytical Engine**: Aggregates role demand, skill demand, and market summary stats into Parquet/DuckDB.
+- **FastAPI Endpoints**: High-performance REST endpoints backed by DuckDB SQL over Parquet.
+- **Intelligence Dashboard**: Premium Next.js frontend with live market pulse, interactive skill filters, KPI cards, and methodology disclaimers.
+- **Production Hardening**: Full automated test suite (67 pytest unit & data integrity tests), Playwright E2E test suite, Docker containerization, and GitHub Actions CI workflow.
 
-## Future Roadmap
-- Implementation of Bronze/Silver/Gold data pipelines.
-- Data connectors for selected sources.
-- Job classification and skill extraction logic.
-- Advanced analytics on IT talent supply vs demand.
+---
+
+## Local Setup & Quickstart
+
+### Prerequisites
+- Python 3.11+
+- Node.js 20+
+- Docker & Docker Compose (optional for containerized run)
+
+### 1. Environment Configuration
+```powershell
+copy .env.example .env
+```
+
+### 2. Ingest Data & Execute Pipeline
+Run the multi-source pipeline to fetch live vacancies, apply NLP skill extraction, role classification, and generate Gold datasets:
+```powershell
+python scripts/run_pipelines.py --layer all
+```
+
+### 3. Start FastAPI Backend API
+```powershell
+python -m uvicorn apps.api.app.main:app --reload --port 8000
+```
+- API Base: `http://localhost:8000/api/health`
+- Swagger Docs: `http://localhost:8000/docs`
+
+### 4. Start Next.js Frontend Dashboard
+```powershell
+cd apps/web
+npm run dev
+```
+- Web Dashboard: `http://localhost:3000`
+
+---
+
+## Automated Testing
+
+### Backend & Data Integrity Tests
+Run all 67 Python unit, API, data integrity, and pipeline resilience tests:
+```powershell
+python -m pytest tests apps/api/tests -v
+```
+
+### Playwright End-to-End (E2E) Tests
+Run browser tests across Desktop, Tablet, Mobile, and Reduced Motion viewports:
+```powershell
+cd apps/web
+npm run test:e2e
+```
+
+---
+
+## Docker Reproducibility
+
+To launch the complete platform locally using Docker Compose:
+
+```powershell
+docker compose up --build
+```
+
+- **Frontend Application**: `http://localhost:3000`
+- **FastAPI Backend API**: `http://localhost:8000`
+
+---
+
+## GitHub Actions CI Workflow
+
+The repository includes a GitHub Actions workflow (`.github/workflows/ci.yml`) that automatically runs on every push and pull request:
+1. Pytest suite execution for unit, API, data integrity, and resilience tests.
+2. Next.js production build validation (`npm run build`).
+3. Playwright E2E testing using deterministic API contract mocking (no external network calls during CI).
+
+---
+
+## Security & Zero-Cost Philosophy
+
+- **Zero Paid Dependencies**: Built entirely with open-source software (Python, Next.js, DuckDB, Parquet, Playwright, Docker).
+- **No Mock Production Stats**: Every KPI displayed on the UI originates strictly from observed ATS vacancy data.
+- **Security Hardened**: Configurable CORS origins, sanitized API error responses (preventing stack trace leakage), and isolated Docker execution.
